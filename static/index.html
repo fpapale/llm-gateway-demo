@@ -212,8 +212,15 @@ async function send() {
   try {
     const res = await fetch('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ gateway: $('gateway').value, policy: $('policy').value, conversationRef: $('conv').value.trim(),
-        providerMode: $('provider').value, openaiKey: $('apikey').value, hallucinate: $('hallu').checked,
+        providerMode: $('provider').value, openaiKey: $('apikey').value.trim(), hallucinate: $('hallu').checked,
         sensitive, payload }) });
+    if (!res.ok) {
+      const errText = await res.text();
+      let msg = errText;
+      try { const errJson = JSON.parse(errText); msg = errJson.error?.message || errJson.error || errText; } catch (_) {}
+      alert('Errore server: ' + msg);
+      return;
+    }
     const data = await res.json();
     renderBenchmark(data.results, data.comparison);
     render(data.results);
@@ -363,8 +370,18 @@ async function init() {
     const btn = e.target.closest('button[data-i]');
     if (btn) { const i = +btn.dataset.i; loadScenario(config.scenarios[i], i); }
   };
-  $('newConv').onclick = () => { $('conv').value = newConversationRef(); };
-  $('provider').onchange = () => { $('apikey').style.display = $('provider').value === 'openai' ? 'block' : 'none'; };
+  if (config.hasOpenAiKey) {
+    const opt = $('provider').options[1];
+    if (opt) opt.textContent = `OpenAI Reale (${config.openAiKeyMasked})`;
+    $('apikey').placeholder = `Chiave già configurata (${config.openAiKeyMasked}) - opzionale sovrascrivere`;
+    $('apikey').style.display = 'none';
+    $('provider').onchange = () => {
+      // Chiave già presente nel server: non serve mostrare l'input box
+      $('apikey').style.display = 'none';
+    };
+  } else {
+    $('provider').onchange = () => { $('apikey').style.display = $('provider').value === 'openai' ? 'block' : 'none'; };
+  }
   $('send').onclick = send;
   loadScenario(config.scenarios[0], 0);
   refreshHealth(); setInterval(refreshHealth, 4000);

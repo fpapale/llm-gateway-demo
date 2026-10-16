@@ -31,3 +31,6 @@ gateways:
 
 openai:
   url: "https://api.openai.com/v1/chat/completions"
+  # Inserisci qui la tua API Key OpenAI (es. "sk-...") per abilitare la modalità "OpenAI Reale"
+  # direttamente dalla configurazione, senza doverla mai digitare nel browser.
+  api_key: ""

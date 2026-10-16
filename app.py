@@ -62,6 +62,7 @@ PUBLIC_KEY = Path(os.environ.get("PUBLIC_KEY") or _keys_cfg.get("public_key") or
 # Sezione OpenAI
 _openai_cfg = _CFG.get("openai") or {}
 OPENAI_URL = str(os.environ.get("OPENAI_URL") or _openai_cfg.get("url") or "https://api.openai.com/v1/chat/completions")
+OPENAI_API_KEY = str(os.environ.get("OPENAI_API_KEY") or _openai_cfg.get("api_key") or "").strip()
 
 # Sezione gateways
 _gw_cfg = _CFG.get("gateways") or {}
@@ -654,6 +655,8 @@ def config() -> dict:
         "policies": POLICIES,
         "scenarios": SCENARIOS,
         "configFile": str(CONFIG_PATH) if CONFIG_PATH else None,
+        "hasOpenAiKey": bool(OPENAI_API_KEY),
+        "openAiKeyMasked": (OPENAI_API_KEY[:7] + "..." + OPENAI_API_KEY[-4:]) if len(OPENAI_API_KEY) > 12 else ("Configurata" if OPENAI_API_KEY else ""),
     }
 
 
@@ -898,8 +901,9 @@ async def call_gateway(gateway_id: str, body: dict, request_data: dict) -> dict:
     token = sign_jwt({"iss": request_data.get("issuer"), "application": policy["application"],
                       "purpose": policy["purpose"], "tenantRef": request_data.get("tenantRef"),
                       "actorRef": request_data.get("actorRef"), "conversationRef": request_data["conversationRef"]})
+    api_key = request_data.get("openaiKey") or OPENAI_API_KEY
     _state.update(captured=None, mode=request_data.get("providerMode", "mock"),
-                  hallucinate=bool(request_data.get("hallucinate")), api_key=request_data.get("openaiKey", ""))
+                  hallucinate=bool(request_data.get("hallucinate")), api_key=api_key)
     started = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=120) as client:
