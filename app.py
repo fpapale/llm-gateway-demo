@@ -663,13 +663,42 @@ def config() -> dict:
 @app.get("/api/health")
 async def health() -> dict:
     async def check(client: httpx.AsyncClient, name: str, url: str) -> dict:
+        pass_through = None
+        ner_enabled = None
         try:
             response = await client.get(url, timeout=1.5)
             body = response.json()
             up = response.status_code == 200 and body.get("status") in ("UP", "ok")
+            if up and isinstance(body, dict):
+                components = body.get("components", {})
+                if isinstance(components, dict):
+                    gw = components.get("gateway", {})
+                    details = gw.get("details", {})
+                    if "passThroughMode" in details:
+                        pass_through = bool(details.get("passThroughMode"))
+                        ner_enabled = bool(details.get("nerEnabled"))
+                if pass_through is None and "passThroughMode" in body:
+                    pass_through = bool(body.get("passThroughMode"))
+                    ner_enabled = bool(body.get("nerEnabled"))
+
+            if up and pass_through is None and "/actuator/health" in url:
+                try:
+                    base_url = url.split("/actuator/health")[0]
+                    res = await client.get(f"{base_url}/v1/status", timeout=1.0)
+                    if res.status_code == 200:
+                        st = res.json()
+                        if "passThroughMode" in st:
+                            pass_through = bool(st.get("passThroughMode"))
+                            ner_enabled = bool(st.get("nerEnabled"))
+                except Exception:
+                    pass
         except Exception:
             up = False
-        return {"name": name, "up": up}
+        res = {"name": name, "up": up}
+        if pass_through is not None:
+            res["passThroughMode"] = pass_through
+            res["nerEnabled"] = ner_enabled
+        return res
 
     checks = [(name, url) for gateway in GATEWAYS.values() for name, url in gateway["checks"]]
     async with httpx.AsyncClient() as client:
@@ -753,8 +782,12 @@ def evaluate_gateway_run(result: dict, sensitive: list[str], hallucinate: bool) 
     # 2. Rilevamento anomalie semantiche NER (verbi inglobati, P.IVA scambiata per telefono, falsi positivi menu)
     anomalies: list[str] = []
     strengths: list[str] = []
+    is_pt = bool(result.get("passThroughMode"))
 
-    if upstream:
+    if is_pt:
+        strengths.append("⚡ Modalità Pass-Through attiva: inoltro trasparente all'LLM (NER e sanitizzazione disattivati)")
+
+    if upstream and not is_pt:
         # Verbi imperativi a inizio comando inglobati nel token PERSONA_n
         for verb in ("Chiama", "Cerca"):
             if re.search(rf"\b{verb}\s+[A-Z]", client_text) and not re.search(rf"\b{verb}\s+(?:PERSONA_\d+|\[NOME\])", upstream_text):
@@ -789,7 +822,10 @@ def evaluate_gateway_run(result: dict, sensitive: list[str], hallucinate: bool) 
             strengths.append(f"Filtro DTO strutturato attivo: {len(result['droppedFields'])} campi sensibili eliminati (DROP)")
 
     # Calcolo percentuale Protezione & Precisione PII (privacyPct)
-    if status == 0 or (not hallucinate and status >= 400):
+    if is_pt:
+        privacy_pct = 100
+        strengths.append(f"Pass-Through: {len(active_sensitive)} dati sensibili inoltrati in chiaro senza modifiche")
+    elif status == 0 or (not hallucinate and status >= 400):
         privacy_pct = 0
         anomalies.append(f"Chiamata fallita con HTTP {status} (policy non supportata o servizio non disponibile)")
     else:
@@ -804,7 +840,11 @@ def evaluate_gateway_run(result: dict, sensitive: list[str], hallucinate: bool) 
             anomalies.insert(0, f"{len(leaked)}/{total_sens} dati sensibili lasciati in chiaro verso l'LLM: {', '.join(leaked[:5])}")
 
     # Calcolo percentuale Completezza & Qualità Risposta Finale (responsePct)
-    if hallucinate:
+    if is_pt:
+        response_pct = 100 if 200 <= status < 300 else 0
+        if 200 <= status < 300:
+            strengths.append("Risposta restituita tale e quale al client senza alterazioni")
+    elif hallucinate:
         if status == 502:
             response_pct = 100
             strengths.append("Blocco Fail-Closed (502 UNKNOWN_TOKEN) attivato correttamente sul token allucinato")
@@ -904,12 +944,14 @@ async def call_gateway(gateway_id: str, body: dict, request_data: dict) -> dict:
     api_key = request_data.get("openaiKey") or OPENAI_API_KEY
     _state.update(captured=None, mode=request_data.get("providerMode", "mock"),
                   hallucinate=bool(request_data.get("hallucinate")), api_key=api_key)
+    is_pass_through = False
     started = time.perf_counter()
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             response = await client.post(gateway["url"] + "/v1/chat/completions", json=payload,
                                          headers={"Authorization": f"Bearer {token}", "X-Request-Id": uuid.uuid4().hex[:16]})
         status, text = response.status_code, response.text
+        is_pass_through = response.headers.get("x-gateway-pass-through", "").lower() == "true"
         try:
             answer = response.json()
         except ValueError:
@@ -920,7 +962,7 @@ async def call_gateway(gateway_id: str, body: dict, request_data: dict) -> dict:
     upstream = _state["captured"]
     return {"gateway": gateway_id, "label": gateway["label"], "status": status, "latencyMs": elapsed,
             "clientRequest": payload, "upstreamRequest": upstream, "response": answer,
-            "droppedFields": dropped_fields(payload, upstream)}
+            "droppedFields": dropped_fields(payload, upstream), "passThroughMode": is_pass_through}
 
 
 @app.post("/api/run")

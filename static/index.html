@@ -86,6 +86,10 @@
   .pill.ok { background: rgba(63,185,80,.15); color: var(--ok); } .pill.err { background: rgba(248,81,73,.15); color: var(--bad); }
   .pill.ms { background: rgba(88,166,255,.15); color: var(--accent); }
   .pill.eff { background: rgba(188,140,255,.18); color: var(--purple); border: 1px solid rgba(188,140,255,.4); }
+  .pill.pt { background: rgba(217,119,6,.18); color: #f59e0b; border: 1px solid rgba(217,119,6,.45); }
+  .pill.ner { background: rgba(34,197,94,.18); color: #4ade80; border: 1px solid rgba(34,197,94,.45); }
+  .tag-pt { background: #d97706; color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-left: 4px; }
+  .tag-ner { background: #15803d; color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600; margin-left: 4px; }
   .full-answer { padding: 12px 14px; background: linear-gradient(180deg, rgba(88,166,255,.06), rgba(22,27,34,.4)); border-bottom: 1px solid var(--border); }
   .full-answer .fa-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
   .full-answer .fa-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); }
@@ -185,8 +189,26 @@ const termsRule = (cls) => sensitive.length
 async function refreshHealth() {
   try {
     const data = await (await fetch('/api/health')).json();
-    $('health').innerHTML = data.services.map(s =>
-      `<span class="badge"><span class="dot ${s.up ? 'up' : 'down'}"></span>${s.name}</span>`).join('');
+    $('health').innerHTML = data.services.map(s => {
+      let tag = '';
+      if (s.up && s.passThroughMode !== undefined) {
+        tag = s.passThroughMode
+          ? `<span class="tag-pt" title="NER disattivato: modalità pass-through attiva">PASS-THROUGH</span>`
+          : `<span class="tag-ner" title="NER attivo: protezione privacy abilitata">NER ATTIVO</span>`;
+      }
+      return `<span class="badge"><span class="dot ${s.up ? 'up' : 'down'}"></span>${esc(s.name)}${tag}</span>`;
+    }).join('');
+
+    data.services.forEach(s => {
+      if (s.passThroughMode !== undefined) {
+        const opt = Array.from($('gateway').options).find(o => o.value === s.name);
+        if (opt) {
+          if (!opt.dataset.orig) opt.dataset.orig = opt.textContent;
+          const tag = s.passThroughMode ? ' [⚡ PASS-THROUGH]' : ' [🛡️ NER ATTIVO]';
+          opt.textContent = opt.dataset.orig + tag;
+        }
+      }
+    });
   } catch (e) { /* demo non raggiungibile */ }
 }
 
@@ -331,6 +353,7 @@ function render(results) {
     return `<div class="card">
       <header>
         <span class="title">${esc(r.label)}</span>
+        <span class="pill ${r.passThroughMode ? 'pt' : 'ner'}">${r.passThroughMode ? '⚡ PASS-THROUGH' : '🛡️ NER ATTIVO'}</span>
         <span class="pill eff">Efficienza Globale: ${m.overallPct}%</span>
         <span class="pill ${m.privacyPct >= 90 ? 'ok' : 'err'}">PII: ${m.privacyPct}% (${m.protectedCount}/${m.totalSensitive})</span>
         <span class="pill ms">Velocità: ${m.speedPct}% (${r.latencyMs} ms)</span>
