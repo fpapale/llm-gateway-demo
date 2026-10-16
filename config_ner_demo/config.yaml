@@ -15,18 +15,18 @@ keys:
   public_key: "./keys/client-public.pem"
 
 gateways:
-  # Nuovo Gateway (Dual-Engine / Transformers o spaCy fallback)
+  # Gateway Principale (Modello 0.3B DentalCare / Dual-Engine)
   llm_ner_gateway:
-    url: "http://127.0.0.1:8096"
-    ner_url: "http://127.0.0.1:8098"
-    label: "llm-ner-gateway (Dual-Engine / 0.3B — :8096)"
-    short_label: "llm-ner-gateway"
+    url: "http://llm-ner-gateway:8080"
+    ner_url: "http://llm-ner-gateway-ner:8000"
+    label: "llm-ner-gateway (DentalCare 0.3B — :8080)"
+    short_label: "llm-ner-gateway (0.3B)"
 
-  # Gateway originale (confronto con spaCy)
+  # Gateway di Confronto (spaCy it_core_news_lg standard)
   llm_gateway:
-    url: "http://127.0.0.1:8095"
-    ner_url: "http://127.0.0.1:8097"
-    label: "llm-gateway (Standard spaCy — :8095)"
+    url: "http://llm-gateway:8085"
+    ner_url: "http://llm-gateway-ner:8000"
+    label: "llm-gateway (Standard spaCy — :8085)"
     short_label: "llm-gateway (spaCy)"
 
 openai:
