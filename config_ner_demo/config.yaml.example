@@ -1,0 +1,29 @@
+# ==============================================================================
+# Configurazione parametri per llm-gateway-demo
+# Copiare in ./config_ner_demo/config.yaml e personalizzare secondo le proprie esigenze.
+# ==============================================================================
+
+server:
+  host: "0.0.0.0"
+  port: 8090
+
+keys:
+  dir: "./keys"
+  private_key: "./keys/client-private.pem"
+  public_key: "./keys/client-public.pem"
+
+gateways:
+  llm_ner_gateway:
+    url: "http://127.0.0.1:8096"
+    ner_url: "http://127.0.0.1:8098"
+    label: "llm-ner-gateway (Dual-Engine / 0.3B — :8096)"
+    short_label: "llm-ner-gateway"
+
+  llm_gateway:
+    url: "http://127.0.0.1:8095"
+    ner_url: "http://127.0.0.1:8097"
+    label: "llm-gateway (Standard spaCy — :8095)"
+    short_label: "llm-gateway (spaCy)"
+
+openai:
+  url: "https://api.openai.com/v1/chat/completions"

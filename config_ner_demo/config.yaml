@@ -1,0 +1,33 @@
+# ==============================================================================
+# Configurazione parametri per llm-gateway-demo
+# Cartella: ./config_ner_demo
+# Montata in Docker su /app/config_ner_demo (:ro)
+# ==============================================================================
+
+server:
+  host: "0.0.0.0"
+  port: 8090
+
+keys:
+  # Percorsi delle chiavi EC ES256 per la firma dei token JWT client
+  dir: "./keys"
+  private_key: "./keys/client-private.pem"
+  public_key: "./keys/client-public.pem"
+
+gateways:
+  # Nuovo Gateway (Dual-Engine / Transformers o spaCy fallback)
+  llm_ner_gateway:
+    url: "http://127.0.0.1:8096"
+    ner_url: "http://127.0.0.1:8098"
+    label: "llm-ner-gateway (Dual-Engine / 0.3B — :8096)"
+    short_label: "llm-ner-gateway"
+
+  # Gateway originale (confronto con spaCy)
+  llm_gateway:
+    url: "http://127.0.0.1:8095"
+    ner_url: "http://127.0.0.1:8097"
+    label: "llm-gateway (Standard spaCy — :8095)"
+    short_label: "llm-gateway (spaCy)"
+
+openai:
+  url: "https://api.openai.com/v1/chat/completions"

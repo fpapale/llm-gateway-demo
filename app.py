@@ -23,27 +23,72 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).parent
-KEYS_DIR = Path(os.environ.get("KEYS_DIR", str(ROOT / "keys")))
-PRIVATE_KEY = Path(os.environ.get("PRIVATE_KEY", str(KEYS_DIR / "client-private.pem")))
-PUBLIC_KEY = Path(os.environ.get("PUBLIC_KEY", str(KEYS_DIR / "client-public.pem")))
-OPENAI_URL = os.environ.get("OPENAI_URL", "https://api.openai.com/v1/chat/completions")
 
-LLM_GATEWAY_URL = os.environ.get("LLM_GATEWAY_URL", "http://127.0.0.1:8095").rstrip("/")
-LLM_GATEWAY_NER_URL = os.environ.get("LLM_GATEWAY_NER_URL", "http://127.0.0.1:8097").rstrip("/")
-LLM_NER_GATEWAY_URL = os.environ.get("LLM_NER_GATEWAY_URL", "http://127.0.0.1:8096").rstrip("/")
-LLM_NER_GATEWAY_NER_URL = os.environ.get("LLM_NER_GATEWAY_NER_URL", "http://127.0.0.1:8098").rstrip("/")
+
+def load_demo_config() -> tuple[dict, Path | None]:
+    """Cerca e carica config.yaml dalla cartella ./config_ner_demo (o percorsi alternativi)."""
+    candidates = [
+        Path(os.environ["DEMO_CONFIG"]) if os.environ.get("DEMO_CONFIG") else None,
+        Path("/app/config_ner_demo/config.yaml"),
+        Path("/app/config_ner_demo/config.yml"),
+        ROOT / "config_ner_demo" / "config.yaml",
+        ROOT / "config_ner_demo" / "config.yml",
+        ROOT / "config.yaml",
+    ]
+    cfg_path = next((p for p in candidates if p is not None and p.is_file()), None)
+    cfg: dict = {}
+    if cfg_path is not None:
+        try:
+            import yaml
+            cfg = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        except Exception as exc:
+            print(f"[WARN] Impossibile leggere configurazione {cfg_path}: {exc}")
+    return cfg, cfg_path
+
+
+_CFG, CONFIG_PATH = load_demo_config()
+
+# Sezione server
+_server_cfg = _CFG.get("server") or {}
+DEFAULT_HOST = str(os.environ.get("HOST") or _server_cfg.get("host") or "0.0.0.0")
+DEFAULT_PORT = int(os.environ.get("PORT") or _server_cfg.get("port") or 8090)
+
+# Sezione keys
+_keys_cfg = _CFG.get("keys") or {}
+KEYS_DIR = Path(os.environ.get("KEYS_DIR") or _keys_cfg.get("dir") or str(ROOT / "keys"))
+PRIVATE_KEY = Path(os.environ.get("PRIVATE_KEY") or _keys_cfg.get("private_key") or str(KEYS_DIR / "client-private.pem"))
+PUBLIC_KEY = Path(os.environ.get("PUBLIC_KEY") or _keys_cfg.get("public_key") or str(KEYS_DIR / "client-public.pem"))
+
+# Sezione OpenAI
+_openai_cfg = _CFG.get("openai") or {}
+OPENAI_URL = str(os.environ.get("OPENAI_URL") or _openai_cfg.get("url") or "https://api.openai.com/v1/chat/completions")
+
+# Sezione gateways
+_gw_cfg = _CFG.get("gateways") or {}
+_ner_gw = _gw_cfg.get("llm_ner_gateway") or {}
+_orig_gw = _gw_cfg.get("llm_gateway") or {}
+
+LLM_GATEWAY_URL = str(os.environ.get("LLM_GATEWAY_URL") or _orig_gw.get("url") or "http://127.0.0.1:8095").rstrip("/")
+LLM_GATEWAY_NER_URL = str(os.environ.get("LLM_GATEWAY_NER_URL") or _orig_gw.get("ner_url") or "http://127.0.0.1:8097").rstrip("/")
+LLM_GATEWAY_LABEL = str(os.environ.get("LLM_GATEWAY_LABEL") or _orig_gw.get("label") or f"llm-gateway (Standard spaCy — {LLM_GATEWAY_URL})")
+LLM_GATEWAY_SHORT_LABEL = str(os.environ.get("LLM_GATEWAY_SHORT_LABEL") or _orig_gw.get("short_label") or "llm-gateway (spaCy)")
+
+LLM_NER_GATEWAY_URL = str(os.environ.get("LLM_NER_GATEWAY_URL") or _ner_gw.get("url") or "http://127.0.0.1:8096").rstrip("/")
+LLM_NER_GATEWAY_NER_URL = str(os.environ.get("LLM_NER_GATEWAY_NER_URL") or _ner_gw.get("ner_url") or "http://127.0.0.1:8098").rstrip("/")
+LLM_NER_GATEWAY_LABEL = str(os.environ.get("LLM_NER_GATEWAY_LABEL") or _ner_gw.get("label") or f"llm-ner-gateway (Dual-Engine / 0.3B — {LLM_NER_GATEWAY_URL})")
+LLM_NER_GATEWAY_SHORT_LABEL = str(os.environ.get("LLM_NER_GATEWAY_SHORT_LABEL") or _ner_gw.get("short_label") or "llm-ner-gateway")
 
 GATEWAYS = {
     "llm-gateway": {
-        "label": f"llm-gateway (Standard spaCy — {LLM_GATEWAY_URL})",
-        "shortLabel": "llm-gateway (spaCy)",
+        "label": LLM_GATEWAY_LABEL,
+        "shortLabel": LLM_GATEWAY_SHORT_LABEL,
         "url": LLM_GATEWAY_URL,
         "checks": [("llm-gateway", f"{LLM_GATEWAY_URL}/actuator/health"),
                    ("llm-gateway-ner", f"{LLM_GATEWAY_NER_URL}/health")],
     },
     "llm-ner-gateway": {
-        "label": f"llm-ner-gateway (Dual-Engine / 0.3B — {LLM_NER_GATEWAY_URL})",
-        "shortLabel": "llm-ner-gateway",
+        "label": LLM_NER_GATEWAY_LABEL,
+        "shortLabel": LLM_NER_GATEWAY_SHORT_LABEL,
         "url": LLM_NER_GATEWAY_URL,
         "checks": [("llm-ner-gateway", f"{LLM_NER_GATEWAY_URL}/actuator/health"),
                    ("llm-ner-gateway-ner", f"{LLM_NER_GATEWAY_NER_URL}/health")],
@@ -604,8 +649,12 @@ SCENARIOS = [
 
 @app.get("/api/config")
 def config() -> dict:
-    return {"gateways": [{"id": k, "label": v["label"], "shortLabel": v["shortLabel"]} for k, v in GATEWAYS.items()],
-            "policies": POLICIES, "scenarios": SCENARIOS}
+    return {
+        "gateways": [{"id": k, "label": v["label"], "shortLabel": v["shortLabel"]} for k, v in GATEWAYS.items()],
+        "policies": POLICIES,
+        "scenarios": SCENARIOS,
+        "configFile": str(CONFIG_PATH) if CONFIG_PATH else None,
+    }
 
 
 @app.get("/api/health")
@@ -1008,6 +1057,4 @@ app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 if __name__ == "__main__":
     import uvicorn
 
-    host = os.environ.get("HOST", "0.0.0.0")
-    port = int(os.environ.get("PORT", "8090"))
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    uvicorn.run(app, host=DEFAULT_HOST, port=DEFAULT_PORT, log_level="info")

@@ -30,31 +30,60 @@ Per fermare tutti i servizi avviati:
 
 ---
 
+## Configurazione con Cartella `./config_ner_demo`
+
+Tutti i parametri di configurazione di `llm-gateway-demo` sono definiti nel file **`./config_ner_demo/config.yaml`**:
+
+```yaml
+server:
+  host: "0.0.0.0"
+  port: 8090
+
+keys:
+  dir: "./keys"
+  private_key: "./keys/client-private.pem"
+  public_key: "./keys/client-public.pem"
+
+gateways:
+  llm_ner_gateway:
+    url: "http://127.0.0.1:8096"
+    ner_url: "http://127.0.0.1:8098"
+    label: "llm-ner-gateway (Dual-Engine / 0.3B — :8096)"
+    short_label: "llm-ner-gateway"
+
+  llm_gateway:
+    url: "http://127.0.0.1:8095"
+    ner_url: "http://127.0.0.1:8097"
+    label: "llm-gateway (Standard spaCy — :8095)"
+    short_label: "llm-gateway (spaCy)"
+
+openai:
+  url: "https://api.openai.com/v1/chat/completions"
+```
+
+---
+
 ## Avvio con Docker
 
-È possibile eseguire `llm-gateway-demo` in un container Docker isolato:
+È possibile eseguire `llm-gateway-demo` in un container Docker isolato montando sia `./config_ner_demo` che `./keys`:
 
 ### 1. Build ed esecuzione tramite Docker Compose
 ```bash
 docker compose up -d --build
 ```
 
-L'interfaccia web sarà accessibile su **`http://localhost:8090`**.
-Per default, il container contatta i gateway eseguiti sull'host tramite `host.docker.internal`.
-È possibile personalizzare gli endpoint definendo le variabili d'ambiente:
-- `LLM_NER_GATEWAY_URL`: URL del gateway (default: `http://host.docker.internal:8096` o `http://llm-ner-gateway:8080`)
-- `LLM_NER_GATEWAY_NER_URL`: URL del microservizio NER (default: `http://host.docker.internal:8098` o `http://llm-ner-gateway-ner:8000`)
-- `LLM_GATEWAY_URL`: URL del gateway spaCy (default: `http://host.docker.internal:8095`)
-- `LLM_GATEWAY_NER_URL`: URL del microservizio NER spaCy (default: `http://host.docker.internal:8097`)
+Il file `docker-compose.yml` monta automaticamente `./config_ner_demo` in `/app/config_ner_demo:ro`:
+qualsiasi modifica ai parametri nel file `config.yaml` viene caricata all'avvio senza dover ricostruire l'immagine.
 
 ### 2. Esecuzione manuale con Docker CLI
 ```bash
 # Build dell'immagine
 docker build -t llm-gateway-demo .
 
-# Avvio del container
+# Avvio del container con montaggio volumi
 docker run -d --name llm-gateway-demo \
   -p 8090:8090 \
+  -v ./config_ner_demo:/app/config_ner_demo:ro \
   -v ./keys:/app/keys \
   --add-host=host.docker.internal:host-gateway \
   llm-gateway-demo

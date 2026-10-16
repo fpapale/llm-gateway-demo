@@ -11,8 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py ./
 COPY static/ ./static/
 
-# Cartella per chiavi EC ES256 (può essere montata dall'esterno come volume)
-RUN mkdir -p /app/keys && \
+# Cartelle per chiavi EC ES256 e file di configurazione montabile da ./config_ner_demo
+RUN mkdir -p /app/keys /app/config_ner_demo && \
     useradd --system --uid 10001 demo && \
     chown -R demo:demo /app
 
