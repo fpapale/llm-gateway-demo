@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Gateway Demo · DentalCare &amp; Giurisprudenza</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2330; --border: #2b3445; --text: #e6edf3; --muted: #8b98a9;
+    --accent: #58a6ff; --ok: #3fb950; --bad: #f85149; --warn: #d29922; --purple: #bc8cff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 14px 24px;
+           background: linear-gradient(90deg, #111a2b, #0d1117); border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 18px; margin: 0; letter-spacing: .3px; }
+  header h1 span { color: var(--accent); }
+  #health { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+           background: var(--panel); border: 1px solid var(--border); font-size: 12px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.up { background: var(--ok); box-shadow: 0 0 6px var(--ok); } .dot.down { background: var(--bad); }
+  main { padding: 20px 24px 60px; max-width: 1800px; margin: 0 auto; }
+  .bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; background: var(--panel);
+         border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 5px; }
+  select, input[type=text], input[type=password], textarea { width: 100%; background: var(--bg); color: var(--text);
+         border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font: inherit; }
+  textarea { font: 12.5px/1.45 Consolas, "Cascadia Code", monospace; min-height: 210px; resize: vertical; }
+  .row { display: flex; gap: 8px; align-items: stretch; } .row input { flex: 1; }
+  button { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+           padding: 8px 12px; font: inherit; cursor: pointer; transition: border-color .15s, background .15s; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #04121f; font-weight: 600; border-color: var(--accent); padding: 10px 26px; }
+  button.primary:disabled { opacity: .5; cursor: wait; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--text); font-size: 13px; text-transform: none; letter-spacing: 0; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); margin: 22px 0 10px; }
+  #scenarios { display: grid; grid-template-columns: repeat(auto-fill, minmax(285px, 1fr)); gap: 8px; }
+  #scenarios button { text-align: left; display: flex; flex-direction: column; gap: 3px; padding: 9px 12px; }
+  #scenarios button.active { border-color: var(--accent); background: rgba(88, 166, 255, .12); box-shadow: inset 0 0 0 1px var(--accent); }
+  #scenarios button .cat { font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); font-weight: 600; }
+  #scenarios button .ttl { font-size: 13px; font-weight: 600; color: var(--text); }
+  #scenarioInfo { margin-top: 10px; padding: 11px 14px; background: var(--panel); border: 1px solid var(--border);
+                  border-left: 3px solid var(--accent); border-radius: 8px; font-size: 13px; color: var(--text); }
+  #scenarioInfo .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 4px; }
+  #scenarioInfo .tag { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--border); color: var(--purple); font-family: Consolas, monospace; }
+  .editor { display: grid; grid-template-columns: 1fr; gap: 10px; }
+
+  /* Sezione Confronto & Grafico a Barre */
+  #benchmark { margin-top: 22px; }
+  .bench-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .verdict-banner { padding: 11px 14px; border-radius: 8px; background: rgba(88,166,255,.1); border: 1px solid rgba(88,166,255,.35);
+                    font-size: 13.5px; font-weight: 500; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+  .bench-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; align-items: start; }
+  .chart-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px; }
+  .chart-box h3, .why-box h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+  .metric-group { margin-bottom: 13px; }
+  .metric-group:last-child { margin-bottom: 0; }
+  .metric-title { font-size: 12.5px; font-weight: 600; margin-bottom: 5px; display: flex; justify-content: space-between; color: var(--text); }
+  .metric-title span { color: var(--muted); font-weight: 400; font-size: 11.5px; }
+  .bar-row { display: grid; grid-template-columns: 175px 1fr 68px; gap: 8px; align-items: center; margin-bottom: 4px; font-size: 12px; }
+  .bar-name { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { height: 12px; background: var(--panel2); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+  .bar-fill { height: 100%; border-radius: 999px; transition: width .35s ease; }
+  .bar-fill.g0 { background: linear-gradient(90deg, #388bfd, #58a6ff); }
+  .bar-fill.g1 { background: linear-gradient(90deg, #2ea043, #3fb950); }
+  .bar-fill.bad { background: linear-gradient(90deg, #da3633, #f85149); }
+  .bar-val { text-align: right; font-weight: 600; font-family: Consolas, monospace; font-size: 12px; }
+  .why-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .why-col { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12.5px; }
+  .why-col h4 { margin: 0 0 8px; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .why-col ul { margin: 6px 0 10px; padding-left: 18px; }
+  .why-col li { margin-bottom: 4px; }
+  .why-tag { display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; margin-right: 4px; }
+  .why-tag.pro { background: rgba(63,185,80,.18); color: var(--ok); }
+  .why-tag.con { background: rgba(248,81,73,.18); color: var(--bad); }
+  .why-tag.live { background: rgba(188,140,255,.18); color: var(--purple); }
+
+  /* Risultati e Risposta Completa */
+  #results { display: grid; gap: 18px; margin-top: 18px; }
+  #results.compare { grid-template-columns: 1fr 1fr; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .card > header { padding: 10px 14px; background: var(--panel2); border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .card .title { font-weight: 600; margin-right: auto; }
+  .pill { padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; }
+  .pill.ok { background: rgba(63,185,80,.15); color: var(--ok); } .pill.err { background: rgba(248,81,73,.15); color: var(--bad); }
+  .pill.ms { background: rgba(88,166,255,.15); color: var(--accent); }
+  .pill.eff { background: rgba(188,140,255,.18); color: var(--purple); border: 1px solid rgba(188,140,255,.4); }
+  .full-answer { padding: 12px 14px; background: linear-gradient(180deg, rgba(88,166,255,.06), rgba(22,27,34,.4)); border-bottom: 1px solid var(--border); }
+  .full-answer .fa-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .full-answer .fa-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); }
+  .full-answer .fa-kpis { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11.5px; }
+  .full-answer .fa-box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .obs-list { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; font-size: 11.5px; }
+  .obs-item { padding: 2px 8px; border-radius: 5px; }
+  .obs-item.ok { background: rgba(63,185,80,.13); color: var(--ok); border: 1px solid rgba(63,185,80,.35); }
+  .obs-item.bad { background: rgba(248,81,73,.15); color: var(--bad); border: 1px solid rgba(248,81,73,.4); }
+
+  .panels { display: grid; grid-template-columns: 1fr; }
+  #results:not(.compare) .panels { grid-template-columns: repeat(3, 1fr); }
+  .panel { border-top: 1px solid var(--border); padding: 10px 14px; min-width: 0; }
+  #results:not(.compare) .panel { border-top: none; border-left: 1px solid var(--border); }
+  #results:not(.compare) .panel:first-child { border-left: none; }
+  .panel h3 { margin: 0 0 2px; font-size: 13px; } .panel small { color: var(--muted); display: block; margin-bottom: 8px; }
+  pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: 12px/1.5 Consolas, "Cascadia Code", monospace;
+        background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; max-height: 440px; overflow: auto; }
+  mark { border-radius: 3px; padding: 0 2px; color: inherit; }
+  mark.sens { background: rgba(248,81,73,.28); outline: 1px solid rgba(248,81,73,.6); }
+  mark.tok { background: rgba(188,140,255,.25); outline: 1px solid rgba(188,140,255,.6); }
+  mark.red { background: rgba(210,153,34,.25); outline: 1px solid rgba(210,153,34,.6); }
+  mark.rest { background: rgba(63,185,80,.25); outline: 1px solid rgba(63,185,80,.6); }
+  .dropped { margin-top: 8px; font-size: 12px; color: var(--warn); } .dropped code { background: rgba(210,153,34,.15); padding: 1px 5px; border-radius: 4px; }
+  .legend { font-size: 12px; color: var(--muted); margin-top: 8px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .err-text { color: var(--bad); font-weight: 600; margin-bottom: 6px; }
+  @media (max-width: 1150px) {
+    .bench-grid, .why-grid, #results.compare, #results:not(.compare) .panels { grid-template-columns: 1fr; }
+    #results:not(.compare) .panel { border-left: none; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>LLM Gateway <span>Demo</span> · DentalCare &amp; Giurisprudenza a confronto</h1>
+  <div id="health"></div>
+</header>
+<main>
+  <section class="bar">
+    <div><label for="gateway">Gateway da utilizzare</label>
+      <select id="gateway"></select></div>
+    <div><label for="policy">Policy / Contesto (application + purpose)</label>
+      <select id="policy"></select></div>
+    <div><label for="conv">conversationRef</label>
+      <div class="row"><input type="text" id="conv"><button id="newConv" title="Nuova conversazione: svuota il TokenVault">Nuova Conversazione</button></div></div>
+    <div><label for="provider">Fornitore LLM</label>
+      <select id="provider">
+        <option value="mock">Mock LLM Ispezionabile (Offline)</option>
+        <option value="openai">OpenAI Reale</option>
+      </select>
+      <input type="password" id="apikey" placeholder="OpenAI API Key (sk-...)" style="display:none;margin-top:6px">
+      <label class="check"><input type="checkbox" id="hallu"> Il mock allucina un token (UNKNOWN_TOKEN)</label></div>
+  </section>
+
+  <h2>Scenari DentalCare &amp; Legal preconfigurati (1 click)</h2>
+  <div id="scenarios"></div>
+  <div id="scenarioInfo"></div>
+
+  <h2>Richiesta OpenAI (modificabile)</h2>
+  <div class="editor">
+    <textarea id="payload" spellcheck="false"></textarea>
+    <div><button class="primary" id="send">Invia al gateway</button></div>
+  </div>
+
+  <div id="benchmark"></div>
+  <div id="results"></div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let config, sensitive = [];
+
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const FORMATS = [
+  ['[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}', 'sens'],
+  ['\\b[A-Z]{6}\\d{2}[A-Z]\\d{2}[A-Z]\\d{3}[A-Z]\\b', 'sens'],
+  ['\\bIT\\d{2}[A-Z]\\d{10}[A-Z0-9]{12}\\b', 'sens'],
+  ['\\+39[ \\d]{9,13}\\d', 'sens'],
+];
+const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+
+function highlight(text, rules) {
+  const html = esc(text);
+  const active = rules.filter(r => r[0]);
+  if (!active.length) return html;
+  const re = new RegExp(active.map(r => '(' + r[0] + ')').join('|'), 'g');
+  return html.replace(re, (...m) => {
+    for (let i = 0; i < active.length; i++) if (m[i + 1] !== undefined) return `<mark class="${active[i][1]}">${m[0]}</mark>`;
+    return m[0];
+  });
+}
+const json = o => typeof o === 'string' ? o : JSON.stringify(o, null, 2);
+const termsRule = (cls) => sensitive.length
+  ? [sensitive.slice().sort((a, b) => b.length - a.length).map(t => reEsc(esc(t))).join('|'), cls] : [null, cls];
+
+async function refreshHealth() {
+  try {
+    const data = await (await fetch('/api/health')).json();
+    $('health').innerHTML = data.services.map(s =>
+      `<span class="badge"><span class="dot ${s.up ? 'up' : 'down'}"></span>${s.name}</span>`).join('');
+  } catch (e) { /* demo non raggiungibile */ }
+}
+
+const newConversationRef = () => 'conv-' + Math.random().toString(36).slice(2, 10);
+
+function loadScenario(s, idx) {
+  $('payload').value = json(s.payload);
+  $('policy').value = s.policy;
+  $('hallu').checked = s.hallucinate;
+  sensitive = s.sensitive || [];
+  $('conv').value = newConversationRef();
+  document.querySelectorAll('#scenarios button').forEach((b, i) => b.classList.toggle('active', i === idx));
+  $('scenarioInfo').innerHTML = `<div class="meta"><strong>${esc(s.title)}</strong>
+    <span class="tag">${esc(s.policy)}</span>
+    ${s.hallucinate ? '<span class="tag" style="color:var(--bad)">Simula UNKNOWN_TOKEN (HTTP 502)</span>' : ''}</div>
+    <div>${esc(s.description || '')}</div>`;
+}
+
+async function send() {
+  let payload;
+  try { payload = JSON.parse($('payload').value); } catch (e) { alert('JSON della richiesta non valido: ' + e.message); return; }
+  $('send').disabled = true; $('send').textContent = 'In corso…';
+  try {
+    const res = await fetch('/api/run', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gateway: $('gateway').value, policy: $('policy').value, conversationRef: $('conv').value.trim(),
+        providerMode: $('provider').value, openaiKey: $('apikey').value, hallucinate: $('hallu').checked,
+        sensitive, payload }) });
+    const data = await res.json();
+    renderBenchmark(data.results, data.comparison);
+    render(data.results);
+  } catch (e) { alert('Errore: ' + e.message); }
+  $('send').disabled = false; $('send').textContent = 'Invia al gateway';
+}
+
+function renderBenchmark(results, comparison) {
+  const box = $('benchmark');
+  if (!results || !results.length) { box.innerHTML = ''; return; }
+  const metricsDef = [
+    { key: 'overallPct', title: 'Efficienza Globale Combinata', sub: '65% Protezione PII · 25% Risposta · 10% Velocità', suffix: '%' },
+    { key: 'privacyPct', title: 'Protezione & Precisione PII', sub: 'Copertura dati sensibili senza falsi positivi/errori NER', suffix: '%' },
+    { key: 'speedPct', title: 'Efficienza Velocità (Round-Trip Completo)', sub: 'Raffronto latenza chiamata + NER + risposta', suffix: '%', showMs: true },
+    { key: 'responsePct', title: 'Qualità & Completezza Risposta al Client', sub: 'Integrità del ripristino dei token nella risposta finale', suffix: '%' },
+  ];
+
+  const barsHtml = metricsDef.map(m => {
+    const rows = results.map((r, idx) => {
+      const val = r.metrics ? (r.metrics[m.key] ?? 0) : 0;
+      const cls = val < 60 ? 'bad' : (r.gateway === 'llm-ner-gateway' ? 'g1' : 'g0');
+      const labelExtra = m.showMs ? ` (${r.latencyMs} ms)` : '';
+      return `<div class="bar-row">
+        <div class="bar-name" title="${esc(r.label)}">${esc(r.shortLabel || r.label)}</div>
+        <div class="bar-track"><div class="bar-fill ${cls}" style="width:${Math.max(2, val)}%"></div></div>
+        <div class="bar-val">${val}%${m.showMs ? `<br><small style="color:var(--muted);font-weight:400">${r.latencyMs} ms</small>` : ''}</div>
+      </div>`;
+    }).join('');
+    return `<div class="metric-group">
+      <div class="metric-title">${esc(m.title)} <span>${esc(m.sub)}</span></div>
+      ${rows}
+    </div>`;
+  }).join('');
+
+  const verdictHtml = comparison
+    ? `<div class="verdict-banner">
+        <div>${esc(comparison.verdict)}</div>
+        <span class="pill ms">⚡ Più rapido: ${esc(comparison.speedFastest)} (+${comparison.speedGainPct}% · Δ ${comparison.latencyDiffMs} ms)</span>
+      </div>`
+    : '';
+
+  box.innerHTML = `<section class="bench-card">
+    ${verdictHtml}
+    <div class="bench-grid">
+      <div class="chart-box">
+        <h3>📊 Grafico a Barre: Confronto Efficienza, Privacy, Velocità e Risposta</h3>
+        ${barsHtml}
+      </div>
+      <div class="why-box">
+        <h3>🔍 Dove e perché ciascun Gateway è meglio o peggio</h3>
+        <div class="why-grid">
+          <div class="why-col">
+            <h4 style="color:var(--ok)">🟢 llm-ner-gateway (Rizzo-PII 0.3B · :8096)</h4>
+            <div><span class="why-tag pro">Dove e perché è MEGLIO</span></div>
+            <ul>
+              <li><b>22 categorie PII italiane</b>: riconosce e rimuove <code>ADDRESS</code> (indirizzi), <code>CATASTO</code>, <code>DOCID</code> (carte d'identità/patenti) e <code>TARGA</code> che nel gateway standard escono in chiaro.</li>
+              <li><b>Partita IVA con checksum Luhn</b>: distingue una P.IVA a 11 cifre da un telefono, evitando che finisca in <code>TEL_n</code>.</li>
+              <li><b>Scorporo verbi e anti-falsi-positivi</b>: non ingloba verbi imperativi (<i>«Chiama»</i>, <i>«cerca»</i>) nel token <code>PERSONA_n</code> e ignora le voci di menu di DentalCare (<i>Agenda, Preventivi, Magazzino</i>).</li>
+              <li><b>Contesto lungo 8192 token</b>: basato su ModernBERT/mmBERT, ideale per anamnesi cliniche e atti legali.</li>
+            </ul>
+            <div><span class="why-tag con">Dove e perché è PEGGIO</span></div>
+            <ul>
+              <li><b>Latenza su CPU leggermente superiore</b> (+150–450 ms) e maggior uso di RAM (~1,2 GB) perché esegue una rete neurale Transformer da 300M di parametri.</li>
+            </ul>
+          </div>
+          <div class="why-col">
+            <h4 style="color:var(--accent)">🔵 llm-gateway (Standard spaCy · :8095)</h4>
+            <div><span class="why-tag pro">Dove e perché è MEGLIO</span></div>
+            <ul>
+              <li><b>Velocità pura di inferenza su CPU</b>: la pipeline statistica <code>it_core_news_lg</code> risponde in media con il <b>20–45% di latenza in meno</b> su messaggi brevi.</li>
+              <li><b>Impronta leggera</b>: consuma meno RAM (~500 MB) ed è sufficiente quando i testi contengono solo nomi standard, email, telefoni, CF e IBAN.</li>
+            </ul>
+            <div><span class="why-tag con">Dove e perché è PEGGIO</span></div>
+            <ul>
+              <li><b>Nessuna copertura su indirizzi, catasto, documenti e targhe</b>: questi dati vengono inviati in chiaro a OpenAI.</li>
+              <li><b>Confonde la P.IVA per telefono</b>: la regex telefonica cattura le 11 cifre della P.IVA come <code>TEL_n</code>, alterando anche la risposta finale.</li>
+              <li><b>Verbi e omonimie</b>: ingloba verbi iniziali nel nome (es. <i>«Chiama Giulia Verdi»</i> → <code>PERSONA_1</code>) corrompendo la frase quando il nome viene ripristinato.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function render(results) {
+  const box = $('results');
+  box.className = results.length > 1 ? 'compare' : '';
+  box.innerHTML = results.map(r => {
+    const ok = r.status >= 200 && r.status < 300;
+    const err = !ok && r.response && r.response.error ? r.response.error : null;
+    const m = r.metrics || { overallPct: 0, privacyPct: 0, speedPct: 0, responsePct: 0, fullResponse: { title: 'Risposta', text: '' }, strengths: [], anomalies: [] };
+    const fullTextHtml = highlight(m.fullResponse.text || '', [[`\\b(?:PERSONA|TEL|EMAIL)_\\d+\\b`, 'tok'], termsRule('rest'), ...FORMATS.map(f => [f[0], 'rest'])]);
+    const obsHtml = [
+      ...(m.strengths || []).map(s => `<span class="obs-item ok">✓ ${esc(s)}</span>`),
+      ...(m.anomalies || []).map(a => `<span class="obs-item bad">⚠ ${esc(a)}</span>`),
+    ].join('');
+
+    const upstream = r.upstreamRequest
+      ? highlight(json(r.upstreamRequest), [[`\\b(?:PERSONA|TEL|EMAIL)_\\d+\\b|${UUID}`, 'tok'], ['\\[[A-ZÀ-Ü ]{2,40}\\]', 'red'], termsRule('sens')])
+      : '<i>Il fornitore non è stato raggiunto (richiesta bloccata dal gateway).</i>';
+    const dropped = r.droppedFields && r.droppedFields.length
+      ? `<div class="dropped">Campi eliminati dal gateway (DROP — ${r.droppedFields.length}): ${r.droppedFields.map(f => `<code>${esc(f)}</code>`).join(' ')}</div>` : '';
+    const final = err
+      ? `<div class="err-text">${r.status} ${esc(err.code || '')} — ${esc(err.message || '')}</div>${highlight(json(r.response), [])}`
+      : highlight(json(r.response), [[`\\b(?:PERSONA|TEL|EMAIL)_\\d+\\b`, 'tok'], termsRule('rest'), ...FORMATS.map(f => [f[0], 'rest'])]);
+
+    return `<div class="card">
+      <header>
+        <span class="title">${esc(r.label)}</span>
+        <span class="pill eff">Efficienza Globale: ${m.overallPct}%</span>
+        <span class="pill ${m.privacyPct >= 90 ? 'ok' : 'err'}">PII: ${m.privacyPct}% (${m.protectedCount}/${m.totalSensitive})</span>
+        <span class="pill ms">Velocità: ${m.speedPct}% (${r.latencyMs} ms)</span>
+        <span class="pill ${ok || r.status === 502 ? 'ok' : 'err'}">HTTP ${r.status}</span>
+      </header>
+      <div class="full-answer">
+        <div class="fa-head">
+          <span class="fa-title">💬 ${esc(m.fullResponse.title)}</span>
+          <div class="fa-kpis">
+            <span class="pill ${m.responsePct >= 90 ? 'ok' : 'err'}">Qualità Risposta: ${m.responsePct}%</span>
+          </div>
+        </div>
+        <div class="fa-box">${fullTextHtml}</div>
+        ${obsHtml ? `<div class="obs-list">${obsHtml}</div>` : ''}
+      </div>
+      <div class="panels">
+        <div class="panel"><h3>1 · Client → Gateway</h3><small>Dati reali (in rosso i dati sensibili)</small>
+          <pre>${highlight(json(r.clientRequest), [termsRule('sens'), ...FORMATS])}</pre></div>
+        <div class="panel"><h3>2 · Gateway → Fornitore LLM</h3><small>Ciò che vede OpenAI</small>
+          <pre>${upstream}</pre>${dropped}
+          <div class="legend"><span><mark class="tok">token</mark> pseudonimi</span><span><mark class="red">[…]</mark> segnaposto</span><span><mark class="sens">dato in chiaro</mark> perdita</span></div></div>
+        <div class="panel"><h3>3 · Gateway → Client (JSON grezzo)</h3><small>Payload OpenAI restituito dal gateway</small>
+          <pre>${final}</pre></div>
+      </div></div>`;
+  }).join('');
+}
+
+async function init() {
+  config = await (await fetch('/api/config')).json();
+  $('gateway').innerHTML = '<option value="both">Confronto Side-by-Side (Entrambi i Gateway)</option>'
+    + config.gateways.map(g => `<option value="${g.id}">${esc(g.label)}</option>`).join('');
+  $('gateway').value = 'both';
+  $('policy').innerHTML = config.policies.map(p => `<option value="${p.id}">${esc(p.label)}</option>`).join('');
+  $('scenarios').innerHTML = config.scenarios.map((s, i) =>
+    `<button data-i="${i}"><span class="cat">${esc(s.category || 'Scenario')}</span><span class="ttl">${esc(s.title)}</span></button>`).join('');
+  $('scenarios').onclick = e => {
+    const btn = e.target.closest('button[data-i]');
+    if (btn) { const i = +btn.dataset.i; loadScenario(config.scenarios[i], i); }
+  };
+  $('newConv').onclick = () => { $('conv').value = newConversationRef(); };
+  $('provider').onchange = () => { $('apikey').style.display = $('provider').value === 'openai' ? 'block' : 'none'; };
+  $('send').onclick = send;
+  loadScenario(config.scenarios[0], 0);
+  refreshHealth(); setInterval(refreshHealth, 4000);
+}
+init();
+</script>
+</body>
+</html>
