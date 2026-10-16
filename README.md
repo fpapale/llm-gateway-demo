@@ -1,49 +1,69 @@
 # `llm-gateway-demo` — Suite di Collaudo e Ispettore Side-by-Side
 
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
+[![Docker](https://img.shields.io/badge/Docker-Containers-blue.svg)](#1-architettura-container-docker-e-assegnazione-porte)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
-[![Web UI](https://img.shields.io/badge/UI-HTML5%20%2F%20CSS3%20Responsive-orange.svg)](#funzionalità-della-ui)
-[![Port](https://img.shields.io/badge/Port-8090-blueviolet.svg)](#architettura-e-porte)
+[![Web UI](https://img.shields.io/badge/UI-HTML5%20%2F%20CSS3%20Responsive-orange.svg)](#2-funzionalità-della-web-ui-http1921680728090)
+[![Port](https://img.shields.io/badge/Port-8090-blueviolet.svg)](#1-architettura-container-docker-e-assegnazione-porte)
 
-Applicazione web standalone (porta **`8090`**) progettata per collaudare, ispezionare visivamente a 3 pannelli e confrontare in tempo reale (Side-by-Side):
-1. **`llm-ner-gateway`** (repo: [`fpapale/llm-ner-gateway`](https://github.com/fpapale/llm-ner-gateway)): Gateway primario con motore Dual-Engine specializzato **`llm-ner-dentalcare-0.3B`** (F1 0.985, immunità falsi positivi sui menu DentalCare), validazione checksum Partita IVA Luhn, categorie estese (`ADDRESS`, `CATASTO`, `DOCID`, `TARGA`) e modalità Pass-Through.
-2. **`llm-gateway`** (baseline di riferimento, solo lettura): Gateway con motore standard **`spaCy` (`it_core_news_lg`)**.
+Applicazione web containerizzata (porta **`8090`**) progettata per collaudare, ispezionare visivamente a 3 pannelli e confrontare in tempo reale (Side-by-Side) le chiamate verso modelli linguistici:
+1. **`llm-ner-gateway`** (porta **`8080`**): Gateway primario con motore Dual-Engine specializzato **`llm-ner-dentalcare-0.3B`** (F1 0.985, immunità da falsi positivi sui menu DentalCare), validazione checksum Partita IVA Luhn, categorie estese (`ADDRESS`, `CATASTO`, `DOCID`, `TARGA`) e modalità Pass-Through.
+2. **`llm-gateway`** (porta **`8085`**): Gateway di confronto con motore standard **`spaCy` (`it_core_news_lg`)**.
 
-> [!NOTE]
-> **Vincolo di Sola Lettura su `D:\llm-gateway`**:
-> La cartella `D:\llm-gateway` non viene mai alterata. Lo script `start-all.ps1` crea una copia isolata in `.runtime\llm-gateway` ed esegue i servizi configurando le proprietà e la chiave pubblica crittografica EC `ES256` da riga di comando.
-
----
-
-## 1. Avvio Rapido Locale (Windows — 1 Solo Comando)
-
-Dalla cartella radice `D:\llm-gateway-demo` in PowerShell:
-
-```powershell
-.\start-all.ps1
-```
-
-Lo script orchestra automaticamente l'intero stack di test:
-1. Crea l'ambiente virtuale Python `.venv` della demo e genera/verifica la coppia di chiavi EC P-256 (`ES256`) in `keys/client-private.pem` e `keys/client-public.pem`.
-2. Compila e avvia `llm-gateway-ner` (`:8097`) e `llm-gateway` (`:8095`).
-3. Compila e avvia `llm-ner-gateway-ner` (`:8098`) e `llm-ner-gateway` (`:8096`).
-4. Avvia l'interfaccia web della demo su **`http://localhost:8090`** e apre automaticamente il browser.
-
-Per arrestare tutti i servizi avviati:
-```powershell
-.\stop-all.ps1
-```
+> [!IMPORTANT]
+> **AUTONOMIA TOTALE E ZERO DIPENDENZE ESTERNE**
+> La suite demo **non dipende da repository legacy o cartelle esterne** per il modello spaCy.
+> Entrambe le istanze del gateway sono erogate dallo stack containerizzato **`llm-ner-gateway`**, che ingloba nativamente sia il modello 0.3B sia il modello spaCy (`NER_MODEL=spacy`). L'intero ecosistema opera in container Docker sulla rete `dentalcarepro_dentalcarepro`.
 
 ---
 
-## 2. Funzionalità della Web UI (`http://localhost:8090`)
+## 1. Architettura Container Docker e Assegnazione Porte
+
+Tutti i servizi operano come container Docker orchestrati sulla rete `dentalcarepro_dentalcarepro` (server `192.168.0.72` o ambiente Docker dedicato):
+
+```mermaid
+flowchart TD
+    subgraph Host["Host Docker (Rete dentalcarepro_dentalcarepro)"]
+        Demo["llm-gateway-demo (:8090)<br/>Web UI & Client Simulator"]
+
+        subgraph Stack["Stack Autonomo llm-ner-gateway"]
+            subgraph Inst1["Istanza 1: DentalCare 0.3B (:8080)"]
+                GW1["llm-ner-gateway (:8080)<br/>Spring Boot"]
+                NER1["llm-ner-gateway-ner (:8000)<br/>DentalCare 0.3B"]
+                GW1 --> NER1
+            end
+
+            subgraph Inst2["Istanza 2: Standard spaCy (:8085)"]
+                GW2["llm-gateway (:8085)<br/>Spring Boot (stessa immagine)"]
+                NER2["llm-gateway-ner (:8000)<br/>spaCy it_core_news_lg (NER_MODEL=spacy)"]
+                GW2 --> NER2
+            end
+        end
+
+        Demo -->|"Confronto Side-by-Side (:8080)"| GW1
+        Demo -->|"Confronto Side-by-Side (:8085)"| GW2
+        GW1 -->|"Upstream LLM"| ExtLLM["OpenAI / Mock"]
+        GW2 -->|"Upstream LLM"| ExtLLM
+    end
+```
+
+| Servizio | Container Docker | Porta Esposta | Ruolo Operativo |
+| :--- | :--- | :---: | :--- |
+| **`llm-gateway-demo`** | `llm-gateway-demo` | **`8090`** | Web UI, Simulatore Client JWT `ES256`, Mock/Inspector OpenAI |
+| **`llm-ner-gateway`** | `llm-ner-gateway` | **`8080`** | Gateway primario con modello odontoiatrico 0.3B |
+| **`llm-ner-gateway-ner`**| `llm-ner-gateway-ner` | — | Microservizio Dual-Engine 0.3B (rete interna porta 8000) |
+| **`llm-gateway`** | `llm-gateway` | **`8085`** | Gateway di confronto erogato dal medesimo stack con spaCy |
+| **`llm-gateway-ner`** | `llm-gateway-ner` | — | Microservizio con `NER_MODEL=spacy` (rete interna porta 8000) |
+
+---
+
+## 2. Funzionalità della Web UI (`http://192.168.0.72:8090`)
 
 ### 2.1 Health Check Dinamico con Badge di Stato (Polling ogni 4s)
-Interroga costantemente lo stato di salute dei gateway e dei rispettivi microservizi NER:
-- 🟢 Pallino verde + badge verde **`[NER ATTIVO]`**: Gateway operativo con anonimizzazione e sanitizzazione attive.
-- 🟠 Pallino verde + badge arancione **`[PASS-THROUGH]`**: Gateway operativo in modalità trasparente (richieste inoltrate all'LLM senza sanitizzazione).
-- 🔴 Pallino rosso: Servizio non raggiungibile o offline.
-- Aggiornamento in tempo reale dei titoli dei gateway nel menu a tendina di selezione.
+L'interfaccia interroga continuamente gli endpoint di telemetria `/v1/status` e `/actuator/health` di entrambi i gateway:
+- 🟢 Pallino verde + badge verde **`[NER ATTIVO]`**: Gateway operativo con sanitizzazione e pseudonimizzazione privacy attive.
+- 🟠 Pallino verde + badge arancione **`[PASS-THROUGH]`**: Gateway operativo in modalità pass-through trasparente (richieste e risposte inoltrate senza alterazione).
+- 🔴 Pallino rosso: Servizio offline o non raggiungibile.
+- I titoli dei gateway nel menu a tendina di selezione si aggiornano dinamicamente riflettendo lo stato corrente.
 
 ### 2.2 Ispezione a 3 Pannelli
 Visualizzazione chiara del flusso end-to-end con evidenziazione sintattica colorata:
@@ -53,7 +73,7 @@ Visualizzazione chiara del flusso end-to-end con evidenziazione sintattica color
 
 ### 2.3 Modalità Fornitore Flessibile
 - **Mock Intelligente Offline (Zero Costi)**:
-  - Replica il comportamento di OpenAI senza consumare token API né inviare dati a terzi.
+  - Replica fedelmente le risposte del provider LLM senza spendere token API né trasmettere dati all'esterno.
   - Risponde riutilizzando i token pseudonimi ricevuti per verificare il ripristino automatico.
   - **Toggle Allucinazione Token**: inietta deliberatamente un token sconosciuto (`PERSONA_99`) per verificare sul campo la protezione fail-closed **`502 UNKNOWN_TOKEN`**.
 - **OpenAI Reale**:
@@ -61,16 +81,16 @@ Visualizzazione chiara del flusso end-to-end con evidenziazione sintattica color
   - Supporta sia la chiave preconfigurata a livello server (`config_ner_demo/config.yaml`), sia l'inserimento dinamico a runtime dall'interfaccia utente.
 
 ### 2.4 Confronto Side-by-Side (Dual Execution)
-Consente di inviare simultaneamente lo stesso messaggio a **Gateway 1 (`llm-ner-gateway`)** e **Gateway 2 (`llm-gateway`)**, mettendo a confronto diretto:
-- Capacità di isolare i verbi imperativi (*"Chiama"* vs *"Mario Rossi"*).
-- Gestione dei menu applicativi DentalCare (zero falsi positivi nel modello 0.3B vs falsi allarmi in spaCy).
-- Checksum Luhn su Partita IVA (validazione corretta vs riconoscimento come generico numero).
+Consente di inviare simultaneamente lo stesso messaggio a **Gateway 1 (`llm-ner-gateway` :8080)** e **Gateway 2 (`llm-gateway` :8085)**, evidenziando le differenze su:
+- Isolamento dei verbi imperativi di contatto (*"Chiama"* vs *"Mario Rossi"*).
+- Gestione dei menu applicativi DentalCare (zero falsi positivi nel modello 0.3B vs falsi positivi in spaCy).
+- Checksum Luhn 11 cifre su Partita IVA (validazione corretta vs riconoscimento come numero generico).
 
 ---
 
 ## 3. Gli 11 Scenari Preconfigurati di DentalCare
 
-I test predefiniti simulano i flussi e le strutture DTO reali del repository `dentalcare`:
+I test predefiniti simulano i flussi e le strutture DTO reali di DentalCare Pro:
 
 | # | Scenario | Policy Attiva | Obiettivo del Test |
 |---|:---|:---|:---|
@@ -88,35 +108,42 @@ I test predefiniti simulano i flussi e le strutture DTO reali del repository `de
 
 ---
 
-## 4. Architettura e Assegnazione Porte
+## 4. Installazione e Gestione tramite Script Server
 
-### 4.1 Ambiente di Produzione / Staging Docker (Server `192.168.0.72`)
+La gestione del container `llm-gateway-demo` e dello stack `llm-ner-gateway` è interamente automatizzata dagli script bash nel repository:
 
-Operativo sulla rete Docker condivisa `dentalcarepro_dentalcarepro`:
+### 4.1 Installazione Automatica da Zero (`scripts/install-llm_gateway.sh`)
+Eseguire da `~/docker` sul server Docker (`192.168.0.72`):
+```bash
+cp llm-ner-gateway/scripts/install-llm_gateway.sh ./
+chmod +x install-llm_gateway.sh
+./install-llm_gateway.sh
+```
+Lo script:
+1. Verifica Docker, Docker Compose, Git e OpenSSL.
+2. Crea/valida la rete Docker `dentalcarepro_dentalcarepro`.
+3. Clona `llm-ner-gateway` e `llm-gateway-demo`.
+4. Genera la coppia di chiavi EC P-256 (`keys/client-private.pem` e `keys/client-public.pem`) utilizzata dal simulatore client per firmare i token JWT `ES256`.
+5. Sincronizza `client-public.pem` nel gateway.
+6. Configura `config_ner_demo/config.yaml` puntando ai due gateway containerizzati (:8080 e :8085).
+7. Compila e avvia i container con `docker compose up -d --build`.
 
-| Servizio | Porta Esposta | Ruolo |
-| :--- | :---: | :--- |
-| **`llm-gateway-demo`** | **`8090`** | Web UI, Simulatore Client JWT `ES256`, Mock/Inspector OpenAI |
-| **`llm-ner-gateway`** | **`8080`** | Gateway primario con modello odontoiatrico 0.3B |
-| **`llm-ner-gateway-ner`**| — | Microservizio Dual-Engine (rete interna porta 8000) |
-| **`llm-gateway`** | **`8085`** | Gateway secondario di confronto con spaCy |
-| **`llm-gateway-ner`** | — | Microservizio spaCy (rete interna porta 8000) |
-
-### 4.2 Ambiente di Sviluppo Locale (Windows)
-
-| Servizio | Porta HTTP | Ruolo |
-| :--- | :---: | :--- |
-| **`llm-gateway-demo`** | **`8090`** | Interfaccia Web e Client Simulator |
-| **`llm-ner-gateway`** | **`8096`** | Gateway Java (0.3B Dual-Engine) |
-| **`llm-ner-gateway-ner`**| **`8098`** | Microservizio Python (0.3B / spaCy) |
-| **`llm-gateway`** | **`8095`** | Gateway Java originale (copia `.runtime` sola lettura) |
-| **`llm-gateway-ner`** | **`8097`** | Microservizio Python originale (spaCy) |
+### 4.2 Aggiornamento Continuo Idempotente (`scripts/update-llm-gateway.sh`)
+Eseguire da `~/docker` sul server per applicare gli aggiornamenti da GitHub:
+```bash
+./update-llm-gateway.sh
+```
+Lo script:
+1. Esegue `git pull origin main` per entrambi i repository.
+2. Preserva tutte le configurazioni e le chiavi crittografiche create in precedenza.
+3. Verifica e ripristina i permessi di sicurezza (`chmod 644`).
+4. Ricompila e riavvia i container con zero downtime non programmato.
 
 ---
 
 ## 5. Configurazione: `./config_ner_demo/config.yaml`
 
-Tutti i parametri di runtime sono centralizzati nel file `config_ner_demo/config.yaml`:
+Nel container Docker, la cartella `./config_ner_demo` è montata in sola lettura (`/app/config_ner_demo:ro`):
 
 ```yaml
 server:
@@ -130,30 +157,28 @@ keys:
 
 gateways:
   llm_ner_gateway:
-    url: "http://127.0.0.1:8096"
-    ner_url: "http://127.0.0.1:8098"
-    label: "llm-ner-gateway (Dual-Engine / 0.3B — :8096)"
-    short_label: "llm-ner-gateway"
+    url: "http://llm-ner-gateway:8080"
+    ner_url: "http://llm-ner-gateway-ner:8000"
+    label: "llm-ner-gateway (DentalCare 0.3B — :8080)"
+    short_label: "llm-ner-gateway (0.3B)"
 
   llm_gateway:
-    url: "http://127.0.0.1:8095"
-    ner_url: "http://127.0.0.1:8097"
-    label: "llm-gateway (Standard spaCy — :8095)"
+    url: "http://llm-gateway:8085"
+    ner_url: "http://llm-gateway-ner:8000"
+    label: "llm-gateway (Standard spaCy — :8085)"
     short_label: "llm-gateway (spaCy)"
 
 openai:
   url: "https://api.openai.com/v1/chat/completions"
+  api_key: ""
 ```
 
 ---
 
-## 6. Esecuzione con Docker
+## 6. Esecuzione Docker Standalone
 
-È possibile eseguire `llm-gateway-demo` in un container Docker isolato montando le configurazioni e le chiavi crittografiche:
-
+Per avviare o riavviare solo il container della demo:
 ```bash
-# Avvio con Docker Compose
 docker compose up -d --build
 ```
-
-Il file `docker-compose.yml` monta `./config_ner_demo` in sola lettura (`/app/config_ner_demo:ro`) e persiste la cartella `./keys`: qualsiasi modifica a `config.yaml` viene caricata all'avvio senza ricompilare l'immagine.
+L'interfaccia sarà immediatamente accessibile su **`http://<SERVER_IP>:8090`**.
