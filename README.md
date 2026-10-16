@@ -30,6 +30,38 @@ Per fermare tutti i servizi avviati:
 
 ---
 
+## Avvio con Docker
+
+È possibile eseguire `llm-gateway-demo` in un container Docker isolato:
+
+### 1. Build ed esecuzione tramite Docker Compose
+```bash
+docker compose up -d --build
+```
+
+L'interfaccia web sarà accessibile su **`http://localhost:8090`**.
+Per default, il container contatta i gateway eseguiti sull'host tramite `host.docker.internal`.
+È possibile personalizzare gli endpoint definendo le variabili d'ambiente:
+- `LLM_NER_GATEWAY_URL`: URL del gateway (default: `http://host.docker.internal:8096` o `http://llm-ner-gateway:8080`)
+- `LLM_NER_GATEWAY_NER_URL`: URL del microservizio NER (default: `http://host.docker.internal:8098` o `http://llm-ner-gateway-ner:8000`)
+- `LLM_GATEWAY_URL`: URL del gateway spaCy (default: `http://host.docker.internal:8095`)
+- `LLM_GATEWAY_NER_URL`: URL del microservizio NER spaCy (default: `http://host.docker.internal:8097`)
+
+### 2. Esecuzione manuale con Docker CLI
+```bash
+# Build dell'immagine
+docker build -t llm-gateway-demo .
+
+# Avvio del container
+docker run -d --name llm-gateway-demo \
+  -p 8090:8090 \
+  -v ./keys:/app/keys \
+  --add-host=host.docker.internal:host-gateway \
+  llm-gateway-demo
+```
+
+---
+
 ## Architettura e Porte
 
 | Servizio | Porta | Ruolo |

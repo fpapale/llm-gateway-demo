@@ -7,6 +7,7 @@ Il ciclo completo gira senza il backend DentalCare e, in modalita' mock, senza c
 import asyncio
 import copy
 import json
+import os
 import re
 import time
 import uuid
@@ -22,25 +23,30 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).parent
-KEYS_DIR = ROOT / "keys"
-PRIVATE_KEY = KEYS_DIR / "client-private.pem"
-PUBLIC_KEY = KEYS_DIR / "client-public.pem"
-OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+KEYS_DIR = Path(os.environ.get("KEYS_DIR", str(ROOT / "keys")))
+PRIVATE_KEY = Path(os.environ.get("PRIVATE_KEY", str(KEYS_DIR / "client-private.pem")))
+PUBLIC_KEY = Path(os.environ.get("PUBLIC_KEY", str(KEYS_DIR / "client-public.pem")))
+OPENAI_URL = os.environ.get("OPENAI_URL", "https://api.openai.com/v1/chat/completions")
+
+LLM_GATEWAY_URL = os.environ.get("LLM_GATEWAY_URL", "http://127.0.0.1:8095").rstrip("/")
+LLM_GATEWAY_NER_URL = os.environ.get("LLM_GATEWAY_NER_URL", "http://127.0.0.1:8097").rstrip("/")
+LLM_NER_GATEWAY_URL = os.environ.get("LLM_NER_GATEWAY_URL", "http://127.0.0.1:8096").rstrip("/")
+LLM_NER_GATEWAY_NER_URL = os.environ.get("LLM_NER_GATEWAY_NER_URL", "http://127.0.0.1:8098").rstrip("/")
 
 GATEWAYS = {
     "llm-gateway": {
-        "label": "llm-gateway (Standard spaCy — :8095)",
+        "label": f"llm-gateway (Standard spaCy — {LLM_GATEWAY_URL})",
         "shortLabel": "llm-gateway (spaCy)",
-        "url": "http://127.0.0.1:8095",
-        "checks": [("llm-gateway (:8095)", "http://127.0.0.1:8095/actuator/health"),
-                   ("llm-gateway-ner (:8097)", "http://127.0.0.1:8097/health")],
+        "url": LLM_GATEWAY_URL,
+        "checks": [("llm-gateway", f"{LLM_GATEWAY_URL}/actuator/health"),
+                   ("llm-gateway-ner", f"{LLM_GATEWAY_NER_URL}/health")],
     },
     "llm-ner-gateway": {
-        "label": "llm-ner-gateway (Rizzo PII 0.3B — :8096)",
-        "shortLabel": "llm-ner-gateway (Rizzo-PII)",
-        "url": "http://127.0.0.1:8096",
-        "checks": [("llm-ner-gateway (:8096)", "http://127.0.0.1:8096/actuator/health"),
-                   ("llm-ner-gateway-ner (:8098)", "http://127.0.0.1:8098/health")],
+        "label": f"llm-ner-gateway (Dual-Engine / 0.3B — {LLM_NER_GATEWAY_URL})",
+        "shortLabel": "llm-ner-gateway",
+        "url": LLM_NER_GATEWAY_URL,
+        "checks": [("llm-ner-gateway", f"{LLM_NER_GATEWAY_URL}/actuator/health"),
+                   ("llm-ner-gateway-ner", f"{LLM_NER_GATEWAY_NER_URL}/health")],
     },
 }
 
@@ -64,13 +70,16 @@ def ensure_keys() -> None:
     """Coppia EC P-256 di sviluppo: se esiste la coppia di DentalCare la usa, altrimenti ne crea una."""
     if PRIVATE_KEY.exists() and PUBLIC_KEY.exists():
         return
-    KEYS_DIR.mkdir(exist_ok=True)
+    KEYS_DIR.mkdir(parents=True, exist_ok=True)
     dentalcare_priv = Path(r"D:\dentalcare\backend\config\llm-gateway-private.pem")
     gateway_pub = Path(r"D:\llm-gateway\config\client-public.pem")
     if dentalcare_priv.exists() and gateway_pub.exists():
-        PRIVATE_KEY.write_bytes(dentalcare_priv.read_bytes())
-        PUBLIC_KEY.write_bytes(gateway_pub.read_bytes())
-        return
+        try:
+            PRIVATE_KEY.write_bytes(dentalcare_priv.read_bytes())
+            PUBLIC_KEY.write_bytes(gateway_pub.read_bytes())
+            return
+        except Exception:
+            pass
     key = ec.generate_private_key(ec.SECP256R1())
     PRIVATE_KEY.write_bytes(key.private_bytes(
         serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
@@ -999,4 +1008,6 @@ app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8090, log_level="warning")
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8090"))
+    uvicorn.run(app, host=host, port=port, log_level="info")

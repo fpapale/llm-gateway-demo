@@ -1,0 +1,24 @@
+# Docker Compose per llm-gateway-demo (porta 8090)
+services:
+  llm-gateway-demo:
+    build: .
+    image: llm-gateway-demo:${VERSION:-latest}
+    container_name: llm-gateway-demo
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8090
+      # Endpoint dei gateway: per default punta a host.docker.internal (servizi eseguiti sull'host)
+      # In reti Docker condivise, impostare ad esempio http://llm-ner-gateway:8080
+      - LLM_NER_GATEWAY_URL=${LLM_NER_GATEWAY_URL:-http://host.docker.internal:8096}
+      - LLM_NER_GATEWAY_NER_URL=${LLM_NER_GATEWAY_NER_URL:-http://host.docker.internal:8098}
+      - LLM_GATEWAY_URL=${LLM_GATEWAY_URL:-http://host.docker.internal:8095}
+      - LLM_GATEWAY_NER_URL=${LLM_GATEWAY_NER_URL:-http://host.docker.internal:8097}
+    volumes:
+      # Monta la cartella keys/ con le chiavi client-private.pem e client-public.pem
+      - ./keys:/app/keys
+    extra_hosts:
+      # Consente al container di contattare i servizi in ascolto sull'host Docker
+      - "host.docker.internal:host-gateway"

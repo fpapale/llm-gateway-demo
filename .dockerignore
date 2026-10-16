@@ -1,0 +1,10 @@
+.venv
+.runtime
+logs
+keys
+__pycache__
+*.pyc
+*.log
+.git
+.idea
+.vscode
