@@ -343,7 +343,9 @@ function render(results) {
 
     const upstream = r.upstreamRequest
       ? highlight(json(r.upstreamRequest), [[`\\b(?:PERSONA|TEL|EMAIL)_\\d+\\b|${UUID}`, 'tok'], ['\\[[A-ZÀ-Ü ]{2,40}\\]', 'red'], termsRule('sens')])
-      : '<i>Il fornitore non è stato raggiunto (richiesta bloccata dal gateway).</i>';
+      : (ok
+          ? '<div style="color:var(--text);font-style:italic;padding:8px 0;line-height:1.5;">🌐 Richiesta inoltrata direttamente al provider OpenAI Cloud (HTTPS reale).<br><small style="color:var(--muted)">L\'ispezione del payload intermedio a 3 pannelli è visibile quando il gateway è configurato su <code>/mock-openai</code>.</small></div>'
+          : '<i>Il fornitore non è stato raggiunto (richiesta bloccata dal gateway).</i>');
     const dropped = r.droppedFields && r.droppedFields.length
       ? `<div class="dropped">Campi eliminati dal gateway (DROP — ${r.droppedFields.length}): ${r.droppedFields.map(f => `<code>${esc(f)}</code>`).join(' ')}</div>` : '';
     const final = err
